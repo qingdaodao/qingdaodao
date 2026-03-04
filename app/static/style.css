@@ -1,0 +1,50 @@
+:root {
+  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+body {
+  margin: 0;
+  background: #f4f6fa;
+}
+.container {
+  max-width: 960px;
+  margin: 20px auto;
+  padding: 0 16px 24px;
+}
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+input, button {
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #d8dce5;
+}
+button {
+  cursor: pointer;
+  background: #2f6feb;
+  color: #fff;
+  border: none;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+th, td {
+  border-bottom: 1px solid #e8ebf0;
+  padding: 10px;
+  text-align: left;
+}
+@media (max-width: 720px) {
+  .grid2 {
+    grid-template-columns: 1fr;
+  }
+}
