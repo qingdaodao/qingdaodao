@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>手机配件查询</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>手机配件查询 APP</h1>
+
+    <section class="card">
+      <h2>后台：配件网站配置</h2>
+      <form id="vendorForm" class="grid2">
+        <input name="name" placeholder="网站名称（如：站点A）" required />
+        <input name="base_url" placeholder="网站地址（或 mock://site-a）" required />
+        <input name="username" placeholder="用户名" />
+        <input name="password" type="password" placeholder="密码" />
+        <input name="query_template" value="/search?model={model}&accessory={accessory}" placeholder="查询路径模板" />
+        <input name="price_selector" placeholder="价格 CSS 选择器（可选）" />
+        <button type="submit">添加网站</button>
+        <button type="button" id="seedDemo">一键注入演示站点</button>
+      </form>
+      <ul id="vendorList"></ul>
+    </section>
+
+    <section class="card">
+      <h2>前台：价格查询</h2>
+      <form id="queryForm" class="grid2">
+        <input name="phone_model" placeholder="手机型号（如：iPhone 15）" required />
+        <input name="accessory_name" placeholder="配件名称（如：钢化膜）" required />
+        <button type="submit">查询报价</button>
+      </form>
+
+      <table>
+        <thead>
+          <tr>
+            <th>网站</th>
+            <th>价格</th>
+            <th>状态</th>
+            <th>查询地址</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+    </section>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
