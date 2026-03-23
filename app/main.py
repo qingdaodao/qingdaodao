@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
+from string import Formatter
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -19,6 +20,7 @@ from starlette.requests import Request
 app = FastAPI(title="手机配件价格查询")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+ALLOWED_QUERY_TEMPLATE_FIELDS = {"model", "accessory"}
 
 
 @dataclass
@@ -75,9 +77,28 @@ def list_vendors():
     ]
 
 
+def _validate_query_template(query_template: str) -> None:
+    formatter = Formatter()
+    try:
+        for _, field_name, _, _ in formatter.parse(query_template):
+            if field_name is None:
+                continue
+            base_field = field_name.split(".", 1)[0].split("[", 1)[0]
+            if base_field not in ALLOWED_QUERY_TEMPLATE_FIELDS:
+                allowed_fields = ", ".join(sorted(ALLOWED_QUERY_TEMPLATE_FIELDS))
+                raise ValueError(f"仅支持以下占位符: {allowed_fields}")
+    except ValueError as exc:
+        raise ValueError(f"query_template 无效: {exc}") from exc
+
+
 @app.post("/api/vendors")
 def add_vendor(payload: VendorCreate):
     global next_vendor_id
+    try:
+        _validate_query_template(payload.query_template)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     vendor = Vendor(id=next_vendor_id, **payload.model_dump())
     vendors.append(vendor)
     next_vendor_id += 1
@@ -96,6 +117,51 @@ def _first_number(text: str) -> float | None:
     return float(match.group(1)) if match else None
 
 
+def _build_query_path(vendor: Vendor, phone_model: str, accessory_name: str) -> str:
+    _validate_query_template(vendor.query_template)
+    try:
+        return vendor.query_template.format(
+            model=quote_plus(phone_model),
+            accessory=quote_plus(accessory_name),
+        )
+    except (KeyError, ValueError) as exc:
+        raise ValueError(f"query_template 无效: {exc}") from exc
+
+
+def _coerce_price(value: Any) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            return float(stripped)
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_json_price(data: Any) -> tuple[float | None, str | None]:
+    if not isinstance(data, dict):
+        return None, "JSON 未找到可用价格字段"
+
+    invalid_fields: list[str] = []
+    for key in ("price", "lowest_price", "min_price"):
+        if key not in data:
+            continue
+        price = _coerce_price(data[key])
+        if price is not None:
+            return price, None
+        invalid_fields.append(key)
+
+    if invalid_fields:
+        return None, f"JSON 价格字段格式无效: {', '.join(invalid_fields)}"
+    return None, "JSON 未找到可用价格字段"
+
+
 async def fetch_price(vendor: Vendor, phone_model: str, accessory_name: str) -> dict[str, Any]:
     if vendor.base_url.startswith("mock://"):
         return {
@@ -105,10 +171,16 @@ async def fetch_price(vendor: Vendor, phone_model: str, accessory_name: str) -> 
             "status": "ok",
         }
 
-    path = vendor.query_template.format(
-        model=quote_plus(phone_model),
-        accessory=quote_plus(accessory_name),
-    )
+    try:
+        path = _build_query_path(vendor, phone_model, accessory_name)
+    except ValueError as exc:
+        return {
+            "vendor": vendor.name,
+            "price": None,
+            "status": "error",
+            "error": str(exc),
+        }
+
     query_url = f"{vendor.base_url.rstrip('/')}{path}"
 
     auth = None
@@ -130,18 +202,12 @@ async def fetch_price(vendor: Vendor, phone_model: str, accessory_name: str) -> 
 
     content_type = response.headers.get("content-type", "")
     if "application/json" in content_type:
-        data = response.json()
-        price = None
-        if isinstance(data, dict):
-            for key in ("price", "lowest_price", "min_price"):
-                if key in data:
-                    price = float(data[key])
-                    break
+        price, error = _extract_json_price(response.json())
         return {
             "vendor": vendor.name,
             "price": price,
             "status": "ok" if price is not None else "error",
-            "error": None if price is not None else "JSON 未找到可用价格字段",
+            "error": error,
             "query_url": query_url,
         }
 
